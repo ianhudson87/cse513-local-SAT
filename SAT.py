@@ -14,19 +14,18 @@ class Formula:
             raise ValueError("don't use 0 as a variable")
         self.num_variables = len(self.variables)
 
-    def check_assignment(self, assignment):
+    def check_assignment(self, assignments):
         # assignment looks like: {1:True, 2:False, 3:False} -> x_1=True, x_2=False, x_3=False
-        variables = assignment.keys()
+        variables = assignments.keys()
         if set(variables) != self.variables:
             raise ValueError("variables don't match up with formula")
+
         if self.formula_type == "DNF":
             # make sure every clause has at least 1 satisfied literal
             for clause in self.formula:
-                found_satisfied_literal = False
+                found_satisfied_literal = False # for this clause
                 for literal in clause:
-                    variable = abs(literal) # which variable the clause has
-                    variable_assignment = assignment[variable]
-                    if (variable_assignment is True and literal>0) or (variable_assignment is False and literal<0):
+                    if is_literal_satisfied(literal, assignments):
                         # found satisfied literal for this clause
                         found_satisfied_literal = True
                         break
@@ -39,10 +38,30 @@ class Formula:
             return True
 
         if self.formula_type == "CNF":
-            
-            
+            # see if some term has all of its literals satisfied
+            for term in self.formula:
+                all_literals_satisfied = True
+                for literal in term:
+                    if not is_literal_satisfied(literal, assignments):
+                        # term has unsatisfied literal, try next term
+                        all_literals_satisfied=False
+                        break
+                
+                if all_literals_satisfied:
+                    # this term has all of its literals satisfied
+                    return True
 
-f = Formula([[-1, 2], [3, -2]], formula_type="DNF")
-print(f.num_variables)
-y = f.check_assignment({2:False, 3:True, 1:False})
+            # no term has all of its literals satisfied
+            return False
+
+def is_literal_satisfied(literal, assignments):
+    variable = abs(literal) # which variable the literal has
+    variable_assignment = assignments[variable]
+    if (variable_assignment is True and literal>0) or (variable_assignment is False and literal<0):
+        return True
+    return False
+
+f = Formula([[-1, 2], [3, -2]], formula_type="CNF")
+# print(f.num_variables)
+y = f.check_assignment({2:True, 3:False, 1:False})
 print(y)
