@@ -1,3 +1,4 @@
+import random
 class Formula:
     def __init__(self, formula, formula_type):
         # formula looks like: [[-1, 2], [3, -2]]
@@ -15,7 +16,7 @@ class Formula:
         self.num_variables = len(self.variables)
 
     def check_assignment(self, assignments):
-        # assignment looks like: {1:True, 2:False, 3:False} -> x_1=True, x_2=False, x_3=False
+        # assignment looks like: {1:1, 2:-1, 3:1} -> x_1=True, x_2=False, x_3=False
         variables = assignments.keys()
         if set(variables) != self.variables:
             raise ValueError("variables don't match up with formula")
@@ -55,13 +56,28 @@ class Formula:
             return False
 
 def is_literal_satisfied(literal, assignments):
-    variable = abs(literal) # which variable the literal has
-    variable_assignment = assignments[variable]
-    if (variable_assignment is True and literal>0) or (variable_assignment is False and literal<0):
-        return True
-    return False
+    return literal * assignments[abs(literal)] > 0
+
+
+class Search:
+    def __init__(self, formula):
+        self.formula = formula
+
+    def general_stochastic_local_search_CNF(self, max_tries, max_steps):
+        for i in range(max_tries):
+            s = {}
+            for v in self.formula.variables:
+                s[v] = random.choice([-1, 1])
+            for j in range(1, max_steps):
+                if self.formula.check_assignment(s):
+                    return "solution found"
+                else:
+                    x = chooseVariable(self.formula,s)
+                    s but flip x
+        return "no solution found"
+
 
 f = Formula([[-1, 2], [3, -2]], formula_type="CNF")
 # print(f.num_variables)
-y = f.check_assignment({2:True, 3:False, 1:False})
+y = f.check_assignment({2:1, 3:-1, 1:-1})
 print(y)
