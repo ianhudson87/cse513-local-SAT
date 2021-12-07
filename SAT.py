@@ -11,7 +11,7 @@ class Formula:
         self.formula_type = formula_type
 
         self.variables = set([abs(val) for inner in formula for val in inner])
-        if 0 in self.variables:
+        if  0 in self.variables:
             raise ValueError("don't use 0 as a variable")
         self.num_variables = len(self.variables)
 
@@ -99,7 +99,7 @@ def Test3CNF(search, num_variables, num_clauses, num_tests):
     }
 
     for _ in range(num_tests):
-        # cnf_formula = 
+        cnf_formula = gen_formula(num_variables, num_clauses)
 
         results = search.general_stochastic_local_search_CNF(9e9, 5*num_variables)
         if results is None:
@@ -116,7 +116,21 @@ def Test3CNF(search, num_variables, num_clauses, num_tests):
     }
 
 
-f = Formula([[-1, 2], [3, -2]], formula_type="CNF")
-# print(f.num_variables)
-y = f.check_assignment({2:1, 3:-1, 1:-1})
-print(y)
+def gen_formula(num_var, num_clauses):
+    vars = list(range(1,num_var+1))
+    formula = []
+    for x in range(num_clauses):
+        clause_p = random.sample(vars,3)
+        formula.append([i if random.random()<=.5 else -1*i for i in clause_p])
+    return formula
+
+
+
+# f = Formula([[-1, 2], [3, -2]], formula_type="CNF")
+# # print(f.num_variables)
+# y = f.check_assignment({2:1, 3:-1, 1:-1})
+# print(y)
+
+print(gen_formula(10,3))
+
+#3CNF, num var, num clauses
