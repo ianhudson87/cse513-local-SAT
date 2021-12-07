@@ -60,21 +60,60 @@ def is_literal_satisfied(literal, assignments):
 
 
 class Search:
-    def __init__(self, formula):
-        self.formula = formula
+    def __init__(self, formula, hill_climb, pick, name):
+        self.formula = formula # cnf formula
+        self.hill_climb = hill_climb
+        self.pick = pick
+        self.name = name
 
-    def general_stochastic_local_search_CNF(self, max_tries, max_steps):
+    def general_stochastic_local_search_CNF(self, max_tries, max_flips):
+        num_tries = 0
+        num_final_flips = 0
+        total_flips = 0
         for i in range(max_tries):
-            s = {}
+            num_tries += 1
+            num_final_flips = 0
+            s = {} # assignment
             for v in self.formula.variables:
                 s[v] = random.choice([-1, 1])
-            for j in range(1, max_steps):
+            for j in range(1, max_flips):
+                total_flips += 1
+                num_final_flips += 1
                 if self.formula.check_assignment(s):
-                    return "solution found"
+                    return {"tries": num_tries, "final_flips": num_final_flips, "total_flips": total_flips}
                 else:
-                    x = chooseVariable(self.formula,s)
-                    s but flip x
-        return "no solution found"
+                    possible_vars = self.hill_climb(self.formula,s)
+                    x = self.pick(possible_vars)
+                    s[x] = s[x] * -1
+        return None
+    
+
+def Test3CNF(search, num_variables, num_clauses, num_tests):
+    # generate 3CNF formula with num_variables and num_clauses
+    # test to see if it is satisfiable
+    # try it with the search algorithm
+    test_results = {
+        "tries": [],
+        "final_flips": [],
+        "total_flips": []
+    }
+
+    for _ in range(num_tests):
+        # cnf_formula = 
+
+        results = search.general_stochastic_local_search_CNF(9e9, 5*num_variables)
+        if results is None:
+            raise RuntimeError("reached max iterations")
+
+        test_results["tries"].append(results["tries"])
+        test_results["final_flips"].append(results["final_flips"])
+        test_results["total_flips"].append(results["total_flips"])
+
+    return {
+        "average_tries": sum(test_results["tries"]) / num_tests,
+        "average_final_flips": sum(test_results["final_flips"]) / num_tests,
+        "average_total_flips": sum(test_results["total_flips"]) / num_tests
+    }
 
 
 f = Formula([[-1, 2], [3, -2]], formula_type="CNF")
