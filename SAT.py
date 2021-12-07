@@ -11,7 +11,7 @@ class Formula:
         self.formula_type = formula_type
 
         self.variables = set([abs(val) for inner in formula for val in inner])
-        if 0 in self.variables:
+        if  0 in self.variables:
             raise ValueError("don't use 0 as a variable")
         self.num_variables = len(self.variables)
 
@@ -72,12 +72,28 @@ class Search:
                 if self.formula.check_assignment(s):
                     return "solution found"
                 else:
-                    x = chooseVariable(self.formula,s)
-                    s but flip x
+                    # x = chooseVariable(self.formula,s)
+                    # s but flip x
+                    #need to imp
+                    s=""
         return "no solution found"
 
 
-f = Formula([[-1, 2], [3, -2]], formula_type="CNF")
-# print(f.num_variables)
-y = f.check_assignment({2:1, 3:-1, 1:-1})
-print(y)
+def gen_formula(num_var, num_clauses):
+    vars = list(range(1,num_var+1))
+    formula = []
+    for x in range(num_clauses):
+        clause_p = random.sample(vars,3)
+        formula.append([i if random.random()<=.5 else -1*i for i in clause_p])
+    return formula
+
+
+
+# f = Formula([[-1, 2], [3, -2]], formula_type="CNF")
+# # print(f.num_variables)
+# y = f.check_assignment({2:1, 3:-1, 1:-1})
+# print(y)
+
+print(gen_formula(10,3))
+
+#3CNF, num var, num clauses
