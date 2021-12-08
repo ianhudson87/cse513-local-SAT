@@ -1,4 +1,6 @@
 import random
+from pysat.solvers import Glucose3
+
 class Formula:
     def __init__(self, formula, formula_type):
         # formula looks like: [[-1, 2], [3, -2]]
@@ -14,6 +16,39 @@ class Formula:
         if  0 in self.variables:
             raise ValueError("don't use 0 as a variable")
         self.num_variables = len(self.variables)
+    
+    # def get_scores(self, assignments):
+    #     variables = assignments.keys()
+    #     if set(variables) != self.variables:
+    #         raise ValueError("variables don't match up with formula")
+
+    #     if self.formula_type == "CNF":
+    #         counts = {}
+    #         for clause in self.formula:
+    #             truth_values = [assignments[clause] for ]
+    #             for literal in clause:
+
+    def get_num_satisfied_clauses(self, assignments):
+        variables = assignments.keys()
+        if set(variables) != self.variables:
+            raise ValueError("variables don't match up with formula")
+
+        if self.formula_type == "CNF":
+            num_satisfied_clauses = 0
+            # see if clause has at least 1 satisfied literal
+            for clause in self.formula:
+                found_satisfied_literal = False # for this clause
+                for literal in clause:
+                    if is_literal_satisfied(literal, assignments):
+                        # found satisfied literal for this clause
+                        num_satisfied_clauses += 1
+                        break
+
+            # went through all clauses and always found at least 1 satisfied literal
+            return num_satisfied_clauses
+
+        if self.formula_type == "DNF":
+            raise NotImplementedError("bad")
 
     def check_assignment(self, assignments):
         # assignment looks like: {1:1, 2:-1, 3:1} -> x_1=True, x_2=False, x_3=False
@@ -21,7 +56,7 @@ class Formula:
         if set(variables) != self.variables:
             raise ValueError("variables don't match up with formula")
 
-        if self.formula_type == "DNF":
+        if self.formula_type == "CNF":
             # make sure every clause has at least 1 satisfied literal
             for clause in self.formula:
                 found_satisfied_literal = False # for this clause
@@ -38,7 +73,7 @@ class Formula:
             # went through all clauses and always found at least 1 satisfied literal
             return True
 
-        if self.formula_type == "CNF":
+        if self.formula_type == "DNF":
             # see if some term has all of its literals satisfied
             for term in self.formula:
                 all_literals_satisfied = True
@@ -60,13 +95,16 @@ def is_literal_satisfied(literal, assignments):
 
 
 class Search:
-    def __init__(self, formula, hill_climb, pick, name):
-        self.formula = formula # cnf formula
-        self.hill_climb = hill_climb
-        self.pick = pick
+    def __init__(self, name="name"):
         self.name = name
 
-    def general_stochastic_local_search_CNF(self, max_tries, max_flips):
+    def hill_climb(self, formula, assignments):
+        raise NotImplementedError("implement hill climb")
+
+    def pick(self, possible_vars):
+        raise NotImplementedError("implement pick")
+
+    def general_stochastic_local_search_CNF(self, formula, max_tries, max_flips):
         num_tries = 0
         num_final_flips = 0
         total_flips = 0
@@ -74,18 +112,41 @@ class Search:
             num_tries += 1
             num_final_flips = 0
             s = {} # assignment
-            for v in self.formula.variables:
+            for v in formula.variables:
                 s[v] = random.choice([-1, 1])
             for j in range(1, max_flips):
                 total_flips += 1
                 num_final_flips += 1
-                if self.formula.check_assignment(s):
+                if formula.check_assignment(s):
                     return {"tries": num_tries, "final_flips": num_final_flips, "total_flips": total_flips}
                 else:
-                    possible_vars = self.hill_climb(self.formula,s)
+                    possible_vars = self.hill_climb(formula,s)
                     x = self.pick(possible_vars)
-                    s[x] = s[x] * -1
+                    s[x] *= -1
         return None
+
+class GSat(Search):
+    def hill_climb(self, formula, assignments):
+        max_score = int(-9e5)
+        items_with_max_score = []
+        for variable in formula.variables:
+            score_before = formula.get_num_satisfied_clauses(assignments)
+            assignments[variable] *= -1
+            score_after = formula.get_num_satisfied_clauses(assignments)
+            assignments[variable] *= -1
+            score = score_after - score_before
+            if score == max_score:
+                items_with_max_score.append(variable)
+            elif score > max_score:
+                items_with_max_score = [variable]
+                max_score = score
+            
+        # print(items_with_max_score)
+        return items_with_max_score
+
+
+    def pick(self, possible_vars):
+        return random.choice(possible_vars)
     
 
 def Test3CNF(search, num_variables, num_clauses, num_tests):
@@ -98,18 +159,31 @@ def Test3CNF(search, num_variables, num_clauses, num_tests):
         "total_flips": []
     }
 
-    for _ in range(num_tests):
-        cnf_formula = gen_formula(num_variables, num_clauses)
+    for i in range(num_tests):
+        print(i)
+        found_good_formula = False
+        while not found_good_formula:
+            cnf_formula = gen_formula(num_variables, num_clauses)
+            g = Glucose3()
+            for clause in cnf_formula:
+                g.add_clause(clause)
+            if g.solve():
+                found_good_formula = True
+        print("found_good_formula")
 
-        results = search.general_stochastic_local_search_CNF(9e9, 5*num_variables)
+        formula_obj = Formula(cnf_formula, "CNF")
+
+        results = search.general_stochastic_local_search_CNF(formula_obj, int(9e5), 5*num_variables)
         if results is None:
             raise RuntimeError("reached max iterations")
+        print()
 
         test_results["tries"].append(results["tries"])
         test_results["final_flips"].append(results["final_flips"])
         test_results["total_flips"].append(results["total_flips"])
 
     return {
+        "name": search.name,
         "average_tries": sum(test_results["tries"]) / num_tests,
         "average_final_flips": sum(test_results["final_flips"]) / num_tests,
         "average_total_flips": sum(test_results["total_flips"]) / num_tests
@@ -126,11 +200,16 @@ def gen_formula(num_var, num_clauses):
 
 
 
-# f = Formula([[-1, 2], [3, -2]], formula_type="CNF")
-# # print(f.num_variables)
-# y = f.check_assignment({2:1, 3:-1, 1:-1})
-# print(y)
+f = Formula([[-1, 2], [3, -2]], formula_type="CNF")
+# print(f.num_variables)
+y = f.check_assignment({2:1, 3:-1, 1:-1})
+print("here", y)
 
-print(gen_formula(10,3))
+num_vars = 10
+print(len(gen_formula(num_vars, int(num_vars * 4.3))))
 
 #3CNF, num var, num clauses
+
+gsat_search = GSat("gsat")
+num_vars = 50
+print(Test3CNF(gsat_search, num_vars, int(num_vars * 4.3), 10))
