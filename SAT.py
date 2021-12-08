@@ -1,5 +1,7 @@
 import random
 from pysat.solvers import Glucose3
+import statistics
+import json
 
 class Formula:
     def __init__(self, formula, formula_type):
@@ -17,16 +19,22 @@ class Formula:
             raise ValueError("don't use 0 as a variable")
         self.num_variables = len(self.variables)
     
-    # def get_scores(self, assignments):
-    #     variables = assignments.keys()
-    #     if set(variables) != self.variables:
-    #         raise ValueError("variables don't match up with formula")
-
-    #     if self.formula_type == "CNF":
-    #         counts = {}
-    #         for clause in self.formula:
-    #             truth_values = [assignments[clause] for ]
-    #             for literal in clause:
+    def get_scores(self, assignments):
+        scores = {}
+        for variable in self.variables:
+          scores[variable] = 0
+        for clause in self.formula:
+          num_true = 0
+          for literal in clause:
+            if is_literal_satisfied(literal, assignments):
+              num_true += 1
+          if num_true <= 1:
+            for literal in clause:
+              if num_true == 0:
+                scores[abs(literal)] += 1
+              elif num_true == 1 and is_literal_satisfied(literal, assignments):
+                  scores[abs(literal)] -= 1
+        return scores
 
     def get_num_satisfied_clauses(self, assignments):
         variables = assignments.keys()
@@ -129,12 +137,8 @@ class GSat(Search):
     def hill_climb(self, formula, assignments):
         max_score = int(-9e5)
         items_with_max_score = []
-        for variable in formula.variables:
-            score_before = formula.get_num_satisfied_clauses(assignments)
-            assignments[variable] *= -1
-            score_after = formula.get_num_satisfied_clauses(assignments)
-            assignments[variable] *= -1
-            score = score_after - score_before
+        scores = formula.get_scores(assignments)
+        for variable, score in scores.items():
             if score == max_score:
                 items_with_max_score.append(variable)
             elif score > max_score:
@@ -144,23 +148,67 @@ class GSat(Search):
         # print(items_with_max_score)
         return items_with_max_score
 
+    def pick(self, possible_vars):
+        return random.choice(possible_vars)
+
+class TSat(Search):
+    def hill_climb(self, formula, assignments):
+        scores = formula.get_scores(assignments)
+        vars_positive_scores = [var for var, score in scores.items() if score>0]
+        if len(vars_positive_scores)>0:
+            return vars_positive_scores
+        
+        vars_zero_score = [var for var, score in scores.items() if score==0]
+        if len(vars_zero_score)>0:
+            return vars_zero_score
+
+        return [var for var in scores.keys()]
+
+    def pick(self, possible_vars):
+        return random.choice(possible_vars)
+
+class GTSat(Search):
+    def __init__(self, name, p):
+        super().__init__(name)
+        self.p = p
+        # p is probability of using GSAT
+        # 1-p is probability of using TSAT
+
+    def hill_climb(self, formula, assignments):
+        p = self.p
+        scores = formula.get_scores(assignments)
+
+        if random.uniform(0, 1) < p:
+            # use GSAT
+            max_value = max(scores.values())
+            items_with_max_score = [i for i in formula.variables if scores[i]==max_value]
+            return items_with_max_score
+        else:
+            # use TSAT
+            vars_positive_scores = [var for var, score in scores.items() if score>0]
+            if len(vars_positive_scores)>0:
+                return vars_positive_scores
+            
+            vars_zero_score = [var for var, score in scores.items() if score==0]
+            if len(vars_zero_score)>0:
+                return vars_zero_score
+
+            return [var for var in scores.keys()]
 
     def pick(self, possible_vars):
         return random.choice(possible_vars)
     
 
-def Test3CNF(search, num_variables, num_clauses, num_tests):
+def Test3CNF(searches, num_variables, num_clauses, num_tests):
     # generate 3CNF formula with num_variables and num_clauses
     # test to see if it is satisfiable
     # try it with the search algorithm
-    test_results = {
-        "tries": [],
-        "final_flips": [],
-        "total_flips": []
-    }
+    test_results = {search_obj.name: [] for search_obj in searches}
 
     for i in range(num_tests):
-        print(i)
+        if i % 20== 19:
+            print(i)
+        # print(i)
         found_good_formula = False
         while not found_good_formula:
             cnf_formula = gen_formula(num_variables, num_clauses)
@@ -169,24 +217,24 @@ def Test3CNF(search, num_variables, num_clauses, num_tests):
                 g.add_clause(clause)
             if g.solve():
                 found_good_formula = True
-        print("found_good_formula")
+        # print("found_good_formula")
 
         formula_obj = Formula(cnf_formula, "CNF")
 
-        results = search.general_stochastic_local_search_CNF(formula_obj, int(9e5), 5*num_variables)
-        if results is None:
-            raise RuntimeError("reached max iterations")
-        print()
-
-        test_results["tries"].append(results["tries"])
-        test_results["final_flips"].append(results["final_flips"])
-        test_results["total_flips"].append(results["total_flips"])
+        for search_obj in searches:
+            results = search_obj.general_stochastic_local_search_CNF(formula_obj, int(9e5), 5*num_variables)
+            if results is None:
+                raise RuntimeError("reached max iterations")
+            test_results[search_obj.name].append(results)
 
     return {
-        "name": search.name,
-        "average_tries": sum(test_results["tries"]) / num_tests,
-        "average_final_flips": sum(test_results["final_flips"]) / num_tests,
-        "average_total_flips": sum(test_results["total_flips"]) / num_tests
+        search_name: {
+            "average_tries": sum([result["tries"] for result in results]) / num_tests,
+            "average_final_flips": sum([result["final_flips"] for result in results]) / num_tests,
+            "average_total_flips": sum([result["total_flips"] for result in results]) / num_tests,
+            "stdev total_flips": statistics.stdev([result["total_flips"] for result in results])
+        }
+        for search_name, results in test_results.items()
     }
 
 
@@ -211,5 +259,13 @@ print(len(gen_formula(num_vars, int(num_vars * 4.3))))
 #3CNF, num var, num clauses
 
 gsat_search = GSat("gsat")
-num_vars = 50
-print(Test3CNF(gsat_search, num_vars, int(num_vars * 4.3), 10))
+tsat_search = TSat("tsat")
+gtsat_search25 = GTSat("gtsat(0.25)", 0.25)
+gtsat_search50 = GTSat("gtsat(0.50)", 0.50)
+gtsat_search75 = GTSat("gtsat(0.75)", 0.75)
+searches = [gsat_search, tsat_search, gtsat_search25, gtsat_search50, gtsat_search75]
+num_vars = 100
+results = Test3CNF(searches, num_vars, int(num_vars * 4.3), 1000)
+
+with open("results.json", "w") as f:
+    json.dump(results, f)
